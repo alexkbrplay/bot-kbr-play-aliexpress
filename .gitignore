@@ -1,0 +1,12 @@
+.env 
+__pycache__/ 
+*.pyc 
+logs_analise.txt 
+dashboard_log.txt 
+historico_ali.json 
+ali_indice.json 
+ofertas_insta/ 
+.vscode/ 
+.idea/ 
+*.backup 
+*.tmp 
