@@ -1,6 +1,6 @@
-Arquivo .gitignore criado!echo python-telegram-bot==20.7 
-python-aliexpress-api==3.1.0 
-deep-translator==1.11.4 
-beautifulsoup4==4.12.3 
-requests==2.31.0 
-python-dotenv==1.0.0 
+python-telegram-bot==20.7
+python-aliexpress-api==3.1.0
+deep-translator==1.11.4
+beautifulsoup4==4.12.3
+requests==2.31.0
+python-dotenv==1.0.0
