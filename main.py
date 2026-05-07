@@ -5,9 +5,9 @@ import os
 import sys
 from datetime import datetime, timedelta
 
-from bot import enviar_oferta
-from controle import get_posts_ali, ultimas_ofertas
-from config import HORA_INICIO, HORA_FIM, INTERVALO_SEGUNDOS
+from bot.bot import enviar_oferta
+from bot.controle import get_posts_ali, ultimas_ofertas
+from bot.config import HORA_INICIO, HORA_FIM, INTERVALO_SEGUNDOS
 
 BOT_ATIVO = False
 BUSCANDO = False
