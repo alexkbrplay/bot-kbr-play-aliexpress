@@ -5,11 +5,12 @@ import os
 import sys
 from datetime import datetime, timedelta
 
-from bot.bot import enviar_oferta
-from bot.controle import get_posts_ali, ultimas_ofertas
-from bot.config import HORA_INICIO, HORA_FIM, INTERVALO_SEGUNDOS
+from bot import enviar_oferta
+from controle import get_posts_ali, ultimas_ofertas
+from config import HORA_INICIO, HORA_FIM, INTERVALO_SEGUNDOS
 
-BOT_ATIVO = False
+# ⚠️ MUDE AQUI: BOT JÁ INICIA LIGADO
+BOT_ATIVO = True
 BUSCANDO = False
 PROXIMA_POSTAGEM = None
 LOGS = []
@@ -36,7 +37,7 @@ def tempo_restante():
     diff = (PROXIMA_POSTAGEM - datetime.now()).total_seconds()
     if diff <= 0:
         return "Executando..."
-    return f"{int(diff // 60):02d}m {int(diff % 60):02d}s"
+    return f"{int(diff//60):02d}m {int(diff%60):02d}s"
 
 
 def mostrar_dashboard():
@@ -129,19 +130,7 @@ thread_input.daemon = True
 thread_bot.start()
 thread_input.start()
 
+# ⚠️ REMOVIDO O LOOP DE ESCOLHA - AGORA O BOT RODA DIRETO
 while True:
     mostrar_dashboard()
-    for _ in range(300):
-        time.sleep(0.1)
-        if _comando[0] is not None:
-            break
-    opcao = _comando[0]
-    _comando[0] = None
-    if opcao == "1":
-        BOT_ATIVO = True
-        add_log("Bot iniciado")
-    elif opcao == "2":
-        BOT_ATIVO = False
-        add_log("Bot parado")
-    elif opcao == "3":
-        break
+    time.sleep(5)
