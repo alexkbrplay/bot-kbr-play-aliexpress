@@ -1,8 +1,6 @@
 import threading
 import time
 import asyncio
-import os
-import sys
 from datetime import datetime, timedelta
 
 from bot import enviar_oferta
