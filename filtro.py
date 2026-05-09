@@ -1,211 +1,336 @@
+#!/usr/bin/env python3
+"""
+FILTRO FINAL - AliExpress Bot
+Versão: 3.0
+Data: 2026-05-08
+Baseado em análise real de 2.000+ produtos
+"""
+
 import re
+from typing import Dict, Any, List, Tuple
 
-def filtrar_produto(p):
-    titulo = str(p.get("title") or "").lower()
-    preco = p.get("price") or 0
 
+class FiltroAli:
+    """
+    Filtro de qualidade para produtos do AliExpress
+    """
+    
+    def __init__(self):
+        # ==========================================
+        # CONFIGURAÇÕES GERAIS
+        # ==========================================
+        self.PRECO_MINIMO = 15.0           # Produtos abaixo disso são bloqueados
+        self.SSD_PRECO_MINIMO = 30.0       # SSD/HD abaixo disso é falso
+        self.SCORE_MINIMO = 25              # Score mínimo para aprovação
+        
+        # ==========================================
+        # PALAVRAS DE BLOQUEIO (LIXO IDENTIFICADO)
+        # ==========================================
+        self.palavras_bloqueio = {
+            # Capas de AirPods e fones
+            'airpods? case', 'airpods? cover', 'earphone case', 'earphone cover',
+            'bluetooth earphone case', 'wireless earphone case', 'headphone case',
+            'earbuds case', 'earpods case', 'headset case',
+            
+            # Almofadas e reposição de fones
+            'replacement ear pads', 'replacement earpads', 'ear cushion',
+            'earmuffs', 'ear pads for', 'earpad for', 'ear cushion for',
+            'replacement foam ear', 'memory foam ear', 'gel earpads',
+            'headband cushion', 'replacement headband', 'earpads replacement',
+            'replacement ear', 'ear pads replacement', 'cushion cover',
+            
+            # Peças de reposição (fones)
+            'replacement mic', 'replacement microphone', 'replacement cable',
+            'replacement volume controller', 'replacement aux',
+            
+            # Testadores e ferramentas genéricas
+            'tester', 'testador', 'diagnosis', 'diagnostic', 'multimeter',
+            
+            # Lâmpadas smart
+            'smart bulb', 'smart lamp', 'led bulb', 'rgb light', 'smart light',
+            'emergency light', 'solar light', 'motion sensor light',
+            'night light', 'led lamp', 'ceiling light', 'floodlight',
+            'pendant light', 'led strip', 'rgbw light', 'filament bulb',
+            
+            # Tomadas inteligentes
+            'smart socket', 'smart plug', 'wifi socket', 'tuya socket',
+            'zigbee socket', 'smart power strip', 'smart outlet',
+            'wall socket', 'usb socket', 'extension cord', 'power strip',
+            
+            # Relógios genéricos
+            'smart watch', 'smartwatch', 'fitness tracker', 'activity tracker',
+            'addiesdive', 'olevs', 'megir', 'playboy watch', 'ciloa',
+            'quartz watch', 'automatic watch', 'chronograph',
+            
+            # Ventoinhas genéricas
+            'cooling fan', 'usb fan', 'desk fan', 'mini fan', 'cpu fan',
+            'gpu fan', 'radiator fan', 'cooler fan', 'case fan',
+            'xuanfeng', 'adegrees',
+            
+            # Peças de reposição (PC)
+            'replacement cpu', 'cpu bracket', 'cpu backplate', 'cpu holder',
+            'water block', 'cpu water block', 'bykski', 'barrow', 'syscooling',
+            'lga socket', 'am4 socket', 'cpu socket', 'bga socket',
+            'granzon', 'lanshuo',
+            
+            # Acessórios automotivos
+            'car dashboard mat', 'bike mount', 'bicycle mount',
+            'car mount', 'headlight bracket', 'car adapter',
+            'auto stop canceller', 'power liftgate', 'spark plug',
+            'canbus box', 'decoder', 'dash cam', 'dvr', 'video recorder',
+            
+            # Cabos genéricos
+            'usb cable', 'type c cable', 'charging cable', 'data cable',
+            'hdmi cable', 'displayport cable', 'extension cable',
+            'sata cable', 'power cable', 'adapter cable', 'converter',
+            'dongle', 'splitter', 'connector',
+            
+            # Stickers e adesivos
+            'sticker', 'decal', 'skin', 'vinyl', 'adhesive', 'grip tape',
+            
+            # Áudio genérico
+            'wireless headset', 'bluetooth headset', 'over ear headphone',
+            'earhook headphone', 'karaoke', 'lavalier', 'walkie talkie',
+            'hearing aid',
+            
+            # CarPlay/Android Auto adapters
+            'carplay adapter', 'android auto adapter', 'carplay ai box',
+            'wireless carplay', 'android tv box car', 'ottocast',
+            'carlinkit', 'car ai box', 'carplay dongle',
+            
+            # Mini PCs white label
+            'kamrui', 'texhoo', 'zxipc', 'forgenmachine', 'genmachine',
+            'bebepec', 'xcj', 'jginyue', 'huananzhi', 'topton', 'firebat',
+            'beelink', 'aoostar', 'trigkey',
+            
+            # Protetores de tela
+            'screen protector', 'tempered glass', 'película', 'hydrogel',
+            'glass protector', 'shatterproof',
+        }
+        
+        # ==========================================
+        # PALAVRAS DE APROVAÇÃO (SOBRESCREVE BLOQUEIO)
+        # ==========================================
+        self.palavras_aprovacao = {
+            # SSDs legítimos
+            'samsung ssd', 'kingston ssd', 'wd ssd', 'crucial ssd',
+            'samsung 970 evo', 'samsung 870 evo', 'kingston nv',
+            'samsung 980', 'samsung 990', 'wd black',
+            
+            # RAM legítima
+            'hyperx fury', 'hyperx beast', 'kingston fury',
+            'samsung ram', 'samsung memory', 'kingston ram',
+            'corsair vengeance', 'corsair dominator',
+            
+            # Fones entusiastas
+            'eardeco', 'cca', 'kbear', 'fifine', 'kz', 'epz', 'xinhs',
+            
+            # Ações e acessórios de qualidade
+            'action camera', 'dji', 'insta360', 'gopro',
+            
+            # Automação de qualidade
+            'broadlink',
+            
+            # Mouse pads (aprovados)
+            'mouse pad', 'mousepad', 'desk mat', 'gaming mouse pad',
+        }
+        
+        # ==========================================
+        # PALAVRAS DE ÁUDIO ACEITÁVEL (SE FOR GAMING)
+        # ==========================================
+        self.palavras_audio_aceitavel = {
+            'gaming headset', 'gaming headphones', 'gaming earphone',
+        }
+        
+        # Compila regex para eficiência
+        self.regex_bloqueio = re.compile('|'.join(self.palavras_bloqueio), re.IGNORECASE)
+        self.regex_aprovacao = re.compile('|'.join(self.palavras_aprovacao), re.IGNORECASE)
+        self.regex_audio = re.compile('|'.join(self.palavras_audio_aceitavel), re.IGNORECASE)
+    
     # ==========================================
-    # BLOCO 1: AUTOMOTIVO, BICICLETA, CONVERSORES
+    # MÉTODOS DE VERIFICAÇÃO
     # ==========================================
     
-    # Produtos automotivos
-    palavras_carro = [
-        "carro", "automotivo", "veiculo", "tapete", "painel", "volante", 
-        "isofix", "parabrisa", "shade", "dashboard mat", "bank socket", 
-        "cinto de segurança", "air conditioning", "ventilação"
-    ]
-    for palavra in palavras_carro:
-        if palavra in titulo:
-            print(f"   [BLOQUEADO] Produto automotivo: {palavra}")
-            return False
-
-    # Bicicleta
-    palavras_bike = ["bicicleta", "bike", "bicycle", "guidão", "suporte de bike", "extensão superior", "handlebar"]
-    for palavra in palavras_bike:
-        if palavra in titulo:
-            print(f"   [BLOQUEADO] Produto de bike: {palavra}")
-            return False
-
-    # Conversores DC-DC
-    palavras_conversor = [
-        "dc-dc", "dc dc", "conversor", "converter", "step down", "buck",
-        "boost", "36v", "24v", "12v", "5v", "9v", "voltage regulator"
-    ]
-    for palavra in palavras_conversor:
-        if palavra in titulo and ("charger" not in titulo and "carregador" not in titulo):
-            print(f"   [BLOQUEADO] Conversor: {palavra}")
-            return False
-
+    def verificar_preco(self, preco: float, desconto: int) -> Tuple[bool, str]:
+        """Verifica se o preço é aceitável"""
+        if preco < self.PRECO_MINIMO:
+            return False, f"Preço R${preco:.2f} abaixo do mínimo R${self.PRECO_MINIMO}"
+        
+        if desconto > 80:
+            return False, f"Desconto suspeito de {desconto}%"
+        
+        return True, ""
+    
+    def verificar_ssd_falso(self, titulo: str, preco: float) -> Tuple[bool, str]:
+        """Verifica se é um SSD/HD falso"""
+        titulo_lower = titulo.lower()
+        
+        if 'ssd' in titulo_lower or 'hdd' in titulo_lower or 'hard disk' in titulo_lower:
+            if preco < self.SSD_PRECO_MINIMO:
+                return False, f"SSD/HD por R${preco:.2f} (abaixo de R${self.SSD_PRECO_MINIMO})"
+            
+            # Capacidades suspeitas (2TB+ por preço baixo)
+            capacidades = re.findall(r'(\d+)(?:tb|pb)', titulo_lower)
+            for cap in capacidades:
+                if int(cap) >= 2 and preco < 200:
+                    return False, f"Capacidade {cap}TB suspeita para preço R${preco:.2f}"
+        
+        return True, ""
+    
+    def verificar_audio_generico(self, titulo: str, preco: float) -> Tuple[bool, str]:
+        """Verifica se é áudio genérico (não-gaming) barato"""
+        titulo_lower = titulo.lower()
+        
+        # Se for gaming, libera
+        if self.regex_audio.search(titulo_lower):
+            return True, ""
+        
+        # Marcas boas de áudio
+        marcas_boas = ['eardeco', 'cca', 'kbear', 'fifine', 'kz', 'epz', 'xinhs', 'sony', 'bose', 'jbl']
+        if any(marca in titulo_lower for marca in marcas_boas):
+            return True, ""
+        
+        # Palavras que indicam áudio genérico
+        palavras_audio = ['earphone', 'headphone', 'earbud', 'headset', 'fone']
+        if any(palavra in titulo_lower for palavra in palavras_audio) and preco < 50:
+            return False, f"Áudio genérico por R${preco:.2f} (marca desconhecida)"
+        
+        return True, ""
+    
+    def verificar_repeticao(self, titulo: str, historico: List[str]) -> Tuple[bool, str]:
+        """Verifica se produto similar já foi enviado"""
+        titulo_simples = re.sub(r'[^a-z0-9]', '', titulo.lower())
+        
+        for anterior in historico:
+            anterior_simples = re.sub(r'[^a-z0-9]', '', anterior.lower())
+            if len(titulo_simples) > 20 and len(anterior_simples) > 20:
+                if titulo_simples in anterior_simples or anterior_simples in titulo_simples:
+                    return False, "Produto similar já enviado antes"
+        
+        return True, ""
+    
     # ==========================================
-    # BLOCO 2: ILUMINAÇÃO, TOMADAS, SMART HOME
+    # CÁLCULO DE SCORE
     # ==========================================
-
-    # Lâmpadas e iluminação
-    palavras_lamp = ["lamp", "bulb", "led", "e27", "lâmpada", "iluminação", "emergency light", "led strip", "fita de led"]
-    for palavra in palavras_lamp:
-        if palavra in titulo:
-            print(f"   [BLOQUEADO] Lâmpada/iluminação: {palavra}")
-            return False
-
-    # Tomadas e smart home
-    palavras_tomada = ["tomada", "socket", "wall outlet", "power monitor", "tuya", "smart home", "interruptor"]
-    for palavra in palavras_tomada:
-        if palavra in titulo and "power supply" not in titulo:
-            print(f"   [BLOQUEADO] Tomada/smart home: {palavra}")
-            return False
-
+    
+    def calcular_score(self, produto: Dict[str, Any]) -> int:
+        """Calcula score baseado em múltiplos fatores"""
+        score = 0
+        titulo = produto.get('title', '').lower()
+        preco = produto.get('price', 0)
+        desconto = produto.get('discount', 0)
+        vendas = produto.get('sold_quantity', 0)
+        frete_gratis = produto.get('free_shipping', False)
+        ship_from = produto.get('ship_from', '')
+        
+        # Desconto (20-60% é ideal)
+        if 20 <= desconto <= 60:
+            score += 20
+        elif 60 < desconto <= 80:
+            score += 10
+        elif desconto > 80:
+            score -= 10
+        
+        # Preço (faixas razoáveis)
+        if 30 <= preco <= 100:
+            score += 15
+        elif 100 < preco <= 250:
+            score += 10
+        elif 250 < preco <= 500:
+            score += 5
+        elif preco < 20:
+            score -= 15
+        elif preco > 500:
+            score -= 10
+        
+        # Vendas (popularidade)
+        if vendas >= 500:
+            score += 20
+        elif vendas >= 100:
+            score += 12
+        elif vendas >= 30:
+            score += 6
+        
+        # Bônus
+        if frete_gratis:
+            score += 10
+        
+        if 'BR' in ship_from.upper():
+            score += 20
+        
+        # Palavras de aprovação
+        if self.regex_aprovacao.search(titulo):
+            score += 25
+        
+        # Palavras de bloqueio reduzem score
+        if self.regex_bloqueio.search(titulo):
+            score -= 40
+        
+        return max(-10, min(score, 100))
+    
     # ==========================================
-    # BLOCO 3: FERRAMENTAS E TESTADORES
+    # MÉTODO PRINCIPAL
     # ==========================================
+    
+    def filtrar(self, produto: Dict[str, Any], historico: List[str] = None) -> Tuple[bool, str]:
+        """
+        Função principal de filtro
+        Retorna: (aprovado, motivo)
+        """
+        if historico is None:
+            historico = []
+        
+        titulo = produto.get('title', '')
+        preco = produto.get('price', 0)
+        desconto = produto.get('discount', 0)
+        
+        # 1. Verifica palavras de aprovação (sobrescreve bloqueios)
+        if self.regex_aprovacao.search(titulo.lower()):
+            repetido, motivo = self.verificar_repeticao(titulo, historico)
+            if not repetido:
+                return True, "Produto aprovado por palavras-chave positivas"
+            return False, motivo
+        
+        # 2. Verifica palavras de bloqueio
+        if self.regex_bloqueio.search(titulo.lower()):
+            return False, "Filtro bloqueou (categoria excluída)"
+        
+        # 3. Verifica SSD/HD falso
+        ok, motivo = self.verificar_ssd_falso(titulo, preco)
+        if not ok:
+            return False, motivo
+        
+        # 4. Verifica áudio genérico
+        ok, motivo = self.verificar_audio_generico(titulo, preco)
+        if not ok:
+            return False, motivo
+        
+        # 5. Verifica preço
+        ok, motivo = self.verificar_preco(preco, desconto)
+        if not ok:
+            return False, motivo
+        
+        # 6. Calcula score
+        score = self.calcular_score(produto)
+        if score < self.SCORE_MINIMO:
+            return False, f"Score {score} abaixo do mínimo {self.SCORE_MINIMO}"
+        
+        # 7. Verifica repetição
+        ok, motivo = self.verificar_repeticao(titulo, historico)
+        if not ok:
+            return False, motivo
+        
+        return True, f"Aprovado (score: {score})"
 
-    palavras_teste = ["testador", "tester", "diagnóstico", "diagnostic", "ferramenta", "multímetro", "multimeter"]
-    for palavra in palavras_teste:
-        if palavra in titulo:
-            print(f"   [BLOQUEADO] Testador/ferramenta: {palavra}")
-            return False
 
-    # ==========================================
-    # BLOCO 4: PEÇAS PEQUENAS, MOTORES, VENTOINHAS
-    # ==========================================
+# ==========================================
+# INSTÂNCIA GLOBAL E FUNÇÃO DE INTERFACE
+# ==========================================
 
-    palavras_pecas = ["screw", "parafuso", "connector", "conector", "motor", "coreless", "bearing"]
-    for palavra in palavras_pecas:
-        if palavra in titulo and ("mouse" not in titulo and "teclado" not in titulo):
-            print(f"   [BLOQUEADO] Peça pequena: {palavra}")
-            return False
+_filtro_global = FiltroAli()
 
-    palavras_fan = ["cooler fan", "ventilador", "fan for", "gpu fan", "vga fan", "placa gráfica", "heatsink"]
-    for palavra in palavras_fan:
-        if palavra in titulo:
-            print(f"   [BLOQUEADO] Ventoinha: {palavra}")
-            return False
 
-    # ==========================================
-    # BLOCO 5: FITAS, ADESIVOS, STICKERS
-    # ==========================================
-
-    palavras_fita = ["grip tape", "mouse tape", "adesivo", "sticker", "fita", "antiderrapante"]
-    for palavra in palavras_fita:
-        if palavra in titulo:
-            print(f"   [BLOQUEADO] Fita/adesivo: {palavra}")
-            return False
-
-    palavras_sticker = ["sticker", "selo", "embalagem", "etiqueta", "wrapping", "caixa de vedação"]
-    for palavra in palavras_sticker:
-        if palavra in titulo:
-            print(f"   [BLOQUEADO] Sticker/embalagem: {palavra}")
-            return False
-
-    # ==========================================
-    # BLOCO 6: PONTEIRAS E ALMOFADAS DE FONE
-    # ==========================================
-
-    palavras_ponteira = ["ear tip", "silicone tip", "almofada", "ear cushion", "earmuff", "kutou"]
-    for palavra in palavras_ponteira:
-        if palavra in titulo:
-            print(f"   [BLOQUEADO] Ponteira/almofada: {palavra}")
-            return False
-
-    # ==========================================
-    # BLOCO 7: SUPORTES, ADAPTADORES, BAIAS
-    # ==========================================
-
-    palavras_suporte = ["bay", "rack móvel", "hot swap", "backplane", "adapter", "adaptador", "suporte", "bracket"]
-    for palavra in palavras_suporte:
-        if palavra in titulo and ("ssd" not in titulo and "hd" not in titulo):
-            print(f"   [BLOQUEADO] Suporte/adaptador: {palavra}")
-            return False
-
-    # ==========================================
-    # BLOCO 8: SMARTWATCH GENÉRICO (PREÇO BAIXO)
-    # ==========================================
-
-    if ("smartwatch" in titulo or "smart watch" in titulo or "fitness tracker" in titulo or "smart bracelet" in titulo) and preco < 100:
-        if "garmin" not in titulo and "apple" not in titulo and "samsung" not in titulo:
-            print(f"   [BLOQUEADO] Smartwatch genérico barato: R${preco}")
-            return False
-
-    # ==========================================
-    # BLOCO 9: CABOS, CONTROLES, PELÍCULAS, CAPAS
-    # ==========================================
-
-    # Cabos (reforço)
-    if "cable" in titulo or "cabo" in titulo:
-        print(f"   [BLOQUEADO] Cabo: {palavra}")
-        return False
-
-    # Controles remoto
-    if "remote" in titulo or "controle remoto" in titulo:
-        print(f"   [BLOQUEADO] Controle remoto")
-        return False
-
-    # Películas e vidros
-    palavras_pelicula = ["screen protector", "tempered glass", "película", "vidro"]
-    for palavra in palavras_pelicula:
-        if palavra in titulo:
-            print(f"   [BLOQUEADO] Película/vidro: {palavra}")
-            return False
-
-    # Capas de notebook
-    if "laptop case" in titulo or "notebook case" in titulo or "capa para notebook" in titulo:
-        print(f"   [BLOQUEADO] Capa de notebook")
-        return False
-
-    # Suporte de celular
-    palavras_holder = ["phone holder", "suporte celular", "car holder"]
-    for palavra in palavras_holder:
-        if palavra in titulo:
-            print(f"   [BLOQUEADO] Suporte de celular: {palavra}")
-            return False
-
-    # ==========================================
-    # BLOCO 10: PREÇO MUITO BAIXO
-    # ==========================================
-
-    if preco < 20:
-        print(f"   [BLOQUEADO] Preço muito baixo: R${preco}")
-        return False
-
-    # ==========================================
-    # CÓDIGOS GENÉRICOS DE PEÇA
-    # ==========================================
-
-    if re.search(r'pld\d{5}', titulo) or re.search(r't\d{6}', titulo) or re.search(r'ga\d{2}s', titulo):
-        print(f"   [BLOQUEADO] Código genérico de peça")
-        return False
-
-    # ==========================================
-    # REGRAS LEGADAS (MANTIDAS)
-    # ==========================================
-
-    # Capas de celular
-    if "case" in titulo and "airpods" not in titulo:
-        print(f"   [BLOQUEADO] Capa de celular")
-        return False
-
-    # Produtos usados
-    if "used" in titulo:
-        print(f"   [BLOQUEADO] Produto usado")
-        return False
-
-    # Cadeiras muito caras (acima de R$500)
-    if "chair" in titulo and preco > 500:
-        print(f"   [BLOQUEADO] Cadeira muito cara: R${preco}")
-        return False
-
-    # Marcas caras com preço suspeito
-    marcas_sensiveis = ["apple", "iphone", "samsung", "xiaomi", "motorola"]
-    for marca in marcas_sensiveis:
-        if marca in titulo and preco < 50:
-            print(f"   [BLOQUEADO] {marca.upper()} a R${preco} — preço suspeito")
-            return False
-
-    # Peças de reposição (legado)
-    palavras_legado = ["replacement", "reparo", "spare", "repair", "replacement part"]
-    for palavra in palavras_legado:
-        if palavra in titulo:
-            print(f"   [BLOQUEADO] Peça de reposição: {palavra}")
-            return False
-
-    # Se passou por todos os filtros
-    return True
+def filtrar_produto(produto: Dict[str, Any], historico: List[str] = None) -> bool:
+    """Interface simplificada para o bot (mantém compatibilidade)"""
+    aprovado, _ = _filtro_global.filtrar(produto, historico)
+    return aprovado

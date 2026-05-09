@@ -6,7 +6,6 @@ from telegram.error import TimedOut, RetryAfter
 
 from ali_api import buscar_produtos_ali
 from filtro import filtrar_produto
-from avaliador import produto_aprovado, calcular_score
 from tradutor import traduzir
 from controle import (
     pode_postar_ali,
@@ -42,13 +41,13 @@ def formatar_preco(valor):
     return f"{valor:.2f}".replace(".", ",")
 
 
-def registrar_analise(titulo, preco, desconto, score, motivo, aprovado):
+def registrar_analise(titulo, preco, desconto, motivo, aprovado):
     hora = datetime.now().strftime("%H:%M:%S")
     status = "APROVADO" if aprovado else "REPROVADO"
     with open("logs_analise.txt", "a", encoding="utf-8") as f:
         f.write(f"[{hora}] {status} | {motivo}\n")
         f.write(f"  Produto: {titulo[:80]}\n")
-        f.write(f"  Preço: R${preco} | Desconto: {desconto}% | Score: {score}\n")
+        f.write(f"  Preço: R${preco} | Desconto: {desconto}%\n")
         f.write("-" * 60 + "\n")
 
 
@@ -105,14 +104,6 @@ async def enviar_oferta():
     if not produtos:
         return "Nenhum produto encontrado"
 
-    for p in produtos:
-        try:
-            p["_score"] = calcular_score(p)
-        except:
-            p["_score"] = 0
-
-    produtos = sorted(produtos, key=lambda x: x["_score"], reverse=True)
-
     enviados = 0
     analisados = 0
 
@@ -124,36 +115,26 @@ async def enviar_oferta():
         try:
             desconto = p.get("discount", 0)
             ouro = desconto >= DESCONTO_OURO_ALI
-            score = p.get("_score", 0)
             preco = p.get("price", 0)
             titulo_produto = p.get("title", "")
             ship_from = p.get("ship_from", "")
 
-            if preco <= 0:
-                registrar_analise(titulo_produto, preco, desconto, score, "Preço inválido", False)
-                continue
-
-            if preco < 15 and desconto > 50:
-                registrar_analise(titulo_produto, preco, desconto, score, "Preço suspeito", False)
-                continue
-
+            # Aplica o filtro unificado
             if not filtrar_produto(p):
-                registrar_analise(titulo_produto, preco, desconto, score, "Filtro bloqueou", False)
+                registrar_analise(titulo_produto, preco, desconto, "Filtro bloqueou", False)
                 continue
 
-            if not produto_aprovado(p) and not ouro:
-                registrar_analise(titulo_produto, preco, desconto, score, f"Score {score} abaixo do mínimo", False)
-                continue
-
+            # Limite diário
             if not pode_postar_ali(ouro=ouro):
-                registrar_analise(titulo_produto, preco, desconto, score, "Limite diário", False)
+                registrar_analise(titulo_produto, preco, desconto, "Limite diário", False)
                 return "Limite diário atingido"
 
+            # Evita repetição
             if not pode_enviar_ali(titulo_produto, ouro=ouro):
-                registrar_analise(titulo_produto, preco, desconto, score, "Já enviado antes", False)
+                registrar_analise(titulo_produto, preco, desconto, "Já enviado antes", False)
                 continue
 
-            registrar_analise(titulo_produto, preco, desconto, score, "Preparando envio", True)
+            registrar_analise(titulo_produto, preco, desconto, "Aprovado - enviando", True)
 
             nome_original = traduzir(titulo_produto)
             caracteristicas = extrair_caracteristicas(titulo_produto)
@@ -188,14 +169,12 @@ async def enviar_oferta():
 
             if sucesso:
                 print(f"  [ENVIADO] {nome_resumido}")
-                registrar_analise(titulo_produto, preco, desconto, score, "Enviado com sucesso", True)
                 registrar_post_ali()
                 registrar_envio_ali(titulo_produto)
                 enviados += 1
                 await asyncio.sleep(10)
             else:
                 print(f"  [ERRO] Falha ao enviar: {erro}")
-                registrar_analise(titulo_produto, preco, desconto, score, f"Erro envio: {erro}", False)
                 await asyncio.sleep(5)
 
         except Exception as e:

@@ -6,17 +6,22 @@ from config import APP_KEY, APP_SECRET, TRACKING_ID
 
 ARQUIVO_INDICE = "ali_indice.json"
 
+# ==========================================
+# KEYWORDS OTIMIZADAS (SEM SMARTWATCH)
+# ==========================================
 KEYWORDS = [
     # Áudio
     "bluetooth earbuds",
     "gaming headset",
-    "smartwatch",
     "wireless earbuds",
+    "in ear monitor",
+    "iem earphones",
 
     # Periféricos
     "gaming mouse",
     "mechanical keyboard",
     "gaming mousepad",
+    "mouse pad gaming",
 
     # Hardware
     "nvme ssd",
@@ -29,20 +34,18 @@ KEYWORDS = [
     "amd ryzen 7",
     "lga 1700 motherboard",
     "am4 motherboard",
+    "graphics card",
+    "power supply 80 plus",
 
     # Monitores
     "gaming monitor",
     "curved monitor",
+    "portable monitor",
 
-    # Fontes
-    "power supply 80 plus",
-    "power supply modular",
-
-    # TV / Stream
-    "android tv box",
+    # Ação e acessórios
     "action camera",
-    "smart plug",
-    "smart bulb",
+    "dji accessories",
+    "insta360 accessories",
 ]
 
 INDISPONIVEIS_BR = [
@@ -121,6 +124,7 @@ def buscar_produtos_ali():
 
                 titulo_lower = titulo.lower()
 
+                # Filtro rápido para itens não desejados
                 bloqueado = False
                 for palavra in INDISPONIVEIS_BR:
                     if palavra in titulo_lower:
