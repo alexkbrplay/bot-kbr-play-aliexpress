@@ -1,5 +1,13 @@
+#!/usr/bin/env python3
+"""
+BOT PRINCIPAL - AliExpress Bot
+Versão: 3.4
+Data: 2026-05-09
+"""
+
 import random
 import asyncio
+import re
 from datetime import datetime
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TimedOut, RetryAfter
@@ -17,7 +25,8 @@ from config import (
     TELEGRAM_TOKEN,
     CHAT_ID,
     MAX_POR_EXECUCAO,
-    DESCONTO_OURO_ALI
+    DESCONTO_OURO_ALI,
+    DESCONTO_MINIMO_EXIBIR
 )
 
 FRASES_URGENCIA = [
@@ -25,13 +34,6 @@ FRASES_URGENCIA = [
     "🔥 Vendendo rápido!",
     "⚡ Estoque limitado!",
     "💨 Corre antes que acabe!",
-]
-
-FRASES_ECONOMIA = [
-    "💰 Economia gigante!",
-    "🎁 Imperdível!",
-    "⭐ Melhor preço!",
-    "🚀 Oferta relâmpago!",
 ]
 
 DISCLAIMER = "💡 <i>Preços podem ser ainda melhores na 1° Compra ou Promoções Relâmpago.\n\nSujeito a encargos calculados no fechamento da compra.</i>"
@@ -54,23 +56,61 @@ def registrar_analise(titulo, preco, desconto, motivo, aprovado):
 def extrair_caracteristicas(titulo: str) -> list:
     titulo_lower = titulo.lower()
     caracteristicas = []
-    if "heart rate" in titulo_lower:
-        caracteristicas.append("❤️ Mede batimentos cardíacos")
-    if "blood pressure" in titulo_lower:
-        caracteristicas.append("🩸 Mede pressão arterial")
-    if "bluetooth call" in titulo_lower:
-        caracteristicas.append("📞 Chamada Bluetooth")
-    if "amoled" in titulo_lower:
-        caracteristicas.append("🌈 Tela AMOLED")
-    if "gps" in titulo_lower:
-        caracteristicas.append("📍 GPS integrado")
-    if "waterproof" in titulo_lower:
-        caracteristicas.append("💧 À prova d'água")
+    
+    # Placas-mãe
+    if "b85" in titulo_lower or "h81" in titulo_lower or "z97" in titulo_lower:
+        caracteristicas.append("🖥️ Soquete LGA1150")
+    if "b360" in titulo_lower or "h310" in titulo_lower or "z370" in titulo_lower:
+        caracteristicas.append("🖥️ Soquete LGA1151")
+    if "b450" in titulo_lower or "x570" in titulo_lower:
+        caracteristicas.append("🖥️ Socket AM4")
+    
+    # Processadores
+    if "i5" in titulo_lower or "i7" in titulo_lower:
+        caracteristicas.append("⚡ Intel Core")
+    if "ryzen 5" in titulo_lower or "ryzen 7" in titulo_lower:
+        caracteristicas.append("⚡ AMD Ryzen")
+    
+    # SSDs
+    if "nvme" in titulo_lower:
+        caracteristicas.append("💨 NVMe PCIe")
+    if "sata" in titulo_lower and "ssd" in titulo_lower:
+        caracteristicas.append("💾 SATA SSD")
+    
+    # RAM
+    if "ddr4" in titulo_lower:
+        caracteristicas.append("🧠 DDR4")
+    if "ddr5" in titulo_lower:
+        caracteristicas.append("🧠 DDR5")
+    if "16gb" in titulo_lower:
+        caracteristicas.append("📊 16GB")
+    if "32gb" in titulo_lower:
+        caracteristicas.append("📊 32GB")
+    
+    # Fones
     if "anc" in titulo_lower:
-        caracteristicas.append("🔇 Cancela ruído")
-    if "gaming" in titulo_lower:
-        caracteristicas.append("🎮 Modo gamer")
-    return caracteristicas[:3]
+        caracteristicas.append("🔇 Cancelamento de Ruído")
+    if "bluetooth" in titulo_lower and "ear" in titulo_lower:
+        caracteristicas.append("📡 Bluetooth")
+    
+    # Mouse pads
+    if "rgb" in titulo_lower and ("mouse" in titulo_lower or "pad" in titulo_lower):
+        caracteristicas.append("🌈 Iluminação RGB")
+    if "xxl" in titulo_lower or "900x400" in titulo_lower:
+        caracteristicas.append("📏 Tamanho XXL")
+    
+    return caracteristicas[:4]
+
+
+def gerar_titulo_anuncio(titulo_traduzido: str, ouro: bool) -> str:
+    """Gera título chamativo baseado no produto"""
+    titulo_curto = titulo_traduzido[:45]
+    
+    if ouro:
+        return f"🏆 {titulo_curto}"
+    else:
+        emojis = ["🔥", "⚡", "🎯", "💥", "🚀", "💎"]
+        return f"{random.choice(emojis)} {titulo_curto}"
 
 
 async def enviar_mensagem(chat_id, photo, caption, reply_markup):
@@ -118,49 +158,64 @@ async def enviar_oferta():
             preco = p.get("price", 0)
             titulo_produto = p.get("title", "")
             ship_from = p.get("ship_from", "")
+            frete_gratis = p.get("free_shipping", False)
 
-            # Aplica o filtro unificado
+            # Aplica o filtro
             if not filtrar_produto(p):
                 registrar_analise(titulo_produto, preco, desconto, "Filtro bloqueou", False)
                 continue
 
-            # Limite diário
             if not pode_postar_ali(ouro=ouro):
                 registrar_analise(titulo_produto, preco, desconto, "Limite diário", False)
                 return "Limite diário atingido"
 
-            # Evita repetição
             if not pode_enviar_ali(titulo_produto, ouro=ouro):
                 registrar_analise(titulo_produto, preco, desconto, "Já enviado antes", False)
                 continue
 
             registrar_analise(titulo_produto, preco, desconto, "Aprovado - enviando", True)
 
-            nome_original = traduzir(titulo_produto)
+            # Traduz título
+            titulo_traduzido = traduzir(titulo_produto)
+            
+            # Resumo do título (primeiros 55 caracteres)
+            titulo_resumido = titulo_traduzido[:55] + ("..." if len(titulo_traduzido) > 55 else "")
+            
+            # Características específicas
             caracteristicas = extrair_caracteristicas(titulo_produto)
 
-            palavras_nome = nome_original.split()[:5]
-            nome_resumido = " ".join(palavras_nome)
+            # Monta linha de preço
+            preco_original = p.get("original_price")
+            if preco_original and desconto >= DESCONTO_MINIMO_EXIBIR:
+                linha_preco = f"💰 <b>R$ {formatar_preco(preco)}</b>  (De R$ {formatar_preco(preco_original)})"
+            else:
+                linha_preco = f"💰 <b>R$ {formatar_preco(preco)}</b>"
 
-            titulo_oferta = "🏆 SUPER OFERTA DE OURO" if ouro else random.choice(["🔥 OFERTA IMPERDÍVEL", "⚡ OFERTA RELÂMPAGO", "🎯 MELHOR PREÇO"])
+            # Monta linha de frete
+            linha_frete = "🚚 <b>Frete grátis</b>" if frete_gratis else ""
+            
+            # Monta linha de origem
+            linha_br = "🇧🇷 <b>Envio do Brasil</b>" if "BR" in ship_from.upper() else ""
 
-            mensagem = f"<b>{titulo_oferta}</b>\n\n"
-            mensagem += f"📦 <b>{nome_resumido}</b>\n\n"
-            mensagem += f"💰 <b>R$ {formatar_preco(preco)}</b>\n\n"
+            # Título do anúncio
+            titulo_anuncio = gerar_titulo_anuncio(titulo_resumido, ouro)
 
+            # Monta mensagem
+            mensagem = f"<b>{titulo_anuncio}</b>\n\n"
+            
             if caracteristicas:
                 for carac in caracteristicas:
                     mensagem += f"{carac}\n"
                 mensagem += "\n"
-
-            if p.get("free_shipping", False):
-                mensagem += f"🚚 <b>Frete grátis</b>\n"
-
-            if ship_from == "BR":
-                mensagem += f"🇧🇷 <b>Envio do Brasil</b>\n"
-
-            mensagem += f"\n{random.choice(FRASES_URGENCIA)}\n"
-            mensagem += f"{random.choice(FRASES_ECONOMIA)}\n\n"
+            
+            mensagem += f"{linha_preco}\n"
+            
+            if linha_frete:
+                mensagem += f"{linha_frete}\n"
+            if linha_br:
+                mensagem += f"{linha_br}\n"
+            
+            mensagem += f"\n{random.choice(FRASES_URGENCIA)}\n\n"
             mensagem += DISCLAIMER
 
             teclado = [[InlineKeyboardButton("👉 COMPRAR AGORA", url=p["link"])]]
@@ -168,7 +223,7 @@ async def enviar_oferta():
             sucesso, erro = await enviar_mensagem(CHAT_ID, p["image"], mensagem, InlineKeyboardMarkup(teclado))
 
             if sucesso:
-                print(f"  [ENVIADO] {nome_resumido}")
+                print(f"  [ENVIADO] {titulo_resumido}")
                 registrar_post_ali()
                 registrar_envio_ali(titulo_produto)
                 enviados += 1

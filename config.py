@@ -1,3 +1,7 @@
+# ==========================================
+# CONFIGURAÇÕES
+# ==========================================
+
 import os
 from dotenv import load_dotenv
 
@@ -12,12 +16,8 @@ APP_KEY = os.getenv("APP_KEY")
 APP_SECRET = os.getenv("APP_SECRET")
 TRACKING_ID = os.getenv("TRACKING_ID")
 
-# Horário do bot
-HORA_INICIO = 8
-HORA_FIM = 22
-
 # Postagens
-INTERVALO_SEGUNDOS = 900
+INTERVALO_SEGUNDOS = 900  # 15 minutos
 MAX_POR_EXECUCAO = 1
 MAX_POSTS_DIA_ALI = 100
 

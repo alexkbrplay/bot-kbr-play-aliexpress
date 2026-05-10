@@ -1,3 +1,7 @@
+# ==========================================
+# CONTROLE - AliExpress Bot
+# ==========================================
+
 import json
 import os
 from datetime import datetime, timedelta
